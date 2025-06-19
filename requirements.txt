@@ -1,7 +1,4 @@
+
 numpy
 scipy
-qiskit==0.44.2
-qiskit-aer==0.12.2
-qiskit-algorithms
-pytest
-exceptiongroup 
+qiskit            # for quantum algorithm libraries; install in your environment if needed
