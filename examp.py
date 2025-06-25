@@ -19,10 +19,10 @@ v_p = 1 / np.sqrt(b)
 xmax = 1e6
 vmax = 10.0 * v_p
 
-Nx, Nv = 8, 8
+Nx, Nv = 2, 2
 N = Nx * Nv
 N_particles = 5e5 * 2 * xmax
-m = 2  # Carleman truncation
+m = 1  # Carleman truncation
 
 # -------------------------
 # Helper functions

@@ -33,13 +33,14 @@ print("Any Infs in psi_pad?", np.isinf(psi_pad).any())
 if np.isnan(psi_pad).any() or np.isinf(psi_pad).any():
     raise ValueError("psi_pad contains NaN or Inf values.")
 
-# Normalize psi_pad for quantum state input (norm = 1)
+# Normalize psi_pad for input
 psi_pad = psi_pad / np.linalg.norm(psi_pad)
 
 
-# create the solver and solve
+print('running solver')
 hhl = HHL(estimator=Estimator(), sampler=Sampler())
 solution = hhl.solve(L_herm, psi_pad)
-
+print('classical solution')
 print(solve_linear_system(L_herm,psi_pad))
+print('hhl solution')
 print(solution.solution)
