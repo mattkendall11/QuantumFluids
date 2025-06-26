@@ -1,18 +1,12 @@
 from hhl_funcs.hhl import HHL
-# from src.vlasov import get_L_and_psi
-from examp import get_L_and_psi
+from src.vlasov import get_L_and_psi
 from src.classical_functions import solve_linear_system
 import numpy as np
 
 from qiskit.primitives import Estimator, Sampler
 
 
-# # create the matrix
-# A = np.random.rand(8,8)
-# A = A+A.T
-#
-# # create the right hand side
-# b = np.random.rand(8)
+
 L_op, psi = get_L_and_psi()
 n = L_op.shape[1]
 I = np.eye(n, dtype='float64')
