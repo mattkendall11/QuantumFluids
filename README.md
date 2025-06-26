@@ -1,39 +1,74 @@
-# Vlasov Quantum Solver Project
+# Quantum Vlasov Solver Project
 
-This project provides:
-- **vlasov_1d1v.py**: Classical mapping of the 1D-1V Vlasov equation on a small grid (e.g., 10×10). Constructs F0, F1, and nonlinear RHS for time integration.
-- **quantum_solver.py**: Stubs for estimating Carleman truncation levels and building the embedded linear system for quantum algorithms (HHL, QSP). Includes `estimate_truncation_level` placeholder and notes on computational scaling.
-- **run_vlasov_quantum.py**: Example script demonstrating how to set up the Vlasov system, estimate truncation order, and attempt to build the Carleman matrix (with safeguards on dimension).
-- **requirements.txt**: Lists required Python packages (`numpy`, `scipy`, `qiskit`).
+This project provides both classical and quantum (HHL) solvers for the 1D-1V Vlasov equation, including Carleman embedding and quantum linear system solving.
+
+## Main Components
+
+- **src/vlasov.py**:  
+  Classical and quantum-ready construction of the Vlasov operator, initial condition, and all helper functions.  
+  Provides `get_L_and_psi()` for use in quantum and classical solvers.
+
+- **src/classical_functions.py**:  
+  Classical linear system solver using NumPy.
+
+- **hhl_funcs/**:  
+  - `hhl.py`: Main HHL quantum linear system solver (Qiskit-based).
+  - `numpy_matrix.py`, `linear_system_matrix.py`, `hhl_result.py`: Supporting classes for quantum matrix representation and results.
+
+- **HHLsolver.py**:  
+  Main example script.  
+  - Constructs the Vlasov operator and initial state.
+  - Builds a Hermitian matrix for quantum solving.
+  - Runs both the quantum HHL and classical solvers, printing results.
+
+- **notebooks/**:  
+  - `plots.ipynb`: (empty or for plotting/visualization).
+
+- **requirements.txt**:  
+  Lists required Python packages (`numpy`, `scipy`, `qiskit`, etc.).
+
+---
 
 ## Usage
 
-1. Install dependencies:
-   ```
+1. **Install dependencies:**
+   ```sh
    pip install -r requirements.txt
    ```
-2. Run classical example:
-   ```
-   python run_vlasov_quantum.py
-   ```
-3. For actual quantum solver integration:
-   - Modify `quantum_solver.py` to implement `build_carleman_matrix` for your specific problem size and truncation.
-   - Use Qiskit or other quantum SDK to implement `quantum_solve_stub`.
-   - Be mindful of the rapid growth in dimension: full embedding for 10×10 grid (N=100) at order ≥2 is infeasible to simulate classically.
 
-## Notes on Truncation Level
+2. **Run the quantum/classical example:**
+   ```sh
+   python HHLsolver.py
+   ```
 
-The placeholder `estimate_truncation_level` uses a simple heuristic. For rigorous bounds, analyze the norms and Lipschitz constants of your system's F1, F2, etc., referring to quantum algorithm literature.
+   This will:
+   - Build the Vlasov operator and initial state.
+   - Print diagnostics about the input vector.
+   - Run both the quantum HHL and classical solvers.
+   - Print both solutions for comparison.
+
+---
 
 ## Structure
 
-- `vlasov_1d1v.py`: Core classical code; can be extended for time integration or used as part of Carleman assembly.
-- `quantum_solver.py`: Contains placeholders and stubs for quantum linear solver integration.
-- `run_vlasov_quantum.py`: Example orchestration script.
+- `src/vlasov.py`: Core Vlasov operator and initial state construction.
+- `src/classical_functions.py`: Classical solver.
+- `hhl_funcs/`: Quantum HHL solver and supporting classes.
+- `HHLsolver.py`: Main example script.
+- `notebooks/`: (Optional) Jupyter notebooks for visualization.
+
+---
 
 ## Extending
 
-- Implement adaptive timestep integration in `vlasov_1d1v.py` or integrate with `scipy.integrate.solve_ivp`.
-- Expand `build_carleman_matrix` to assemble blocks for quadratic terms if N is very small or use symmetry to reduce dimension.
-- Integrate Qiskit HHL or Quantum Signal Processing methods in `quantum_solver.py`.
+- Modify `src/vlasov.py` to change grid size, Carleman truncation, or initial conditions.
+- Implement more advanced quantum algorithms in `hhl_funcs/` as needed.
+- Add plotting or analysis in `notebooks/`.
+
+---
+
+## Notes
+
+- The quantum solver uses Qiskit's HHL implementation and requires the input matrix to be Hermitian and of size \(2^n \times 2^n\).
+- For large grids or high truncation, the system size grows rapidly and may be infeasible to simulate classically.
 
