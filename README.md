@@ -1,11 +1,11 @@
 # Quantum Vlasov Solver Project
 
-This project provides both classical and quantum (HHL) solvers for the 1D-1V Vlasov equation, including Carleman embedding and quantum linear system solving.
+This project provides both classical and quantum (HHL) solvers for the 1D-1V Vlasov equation.
 
 ## Main Components
 
 - **src/vlasov.py**:  
-  Classical and quantum-ready construction of the Vlasov operator, initial condition, and all helper functions.  
+  construction of the Vlasov equation, initial condition, and all helper functions.  
   Provides `get_L_and_psi()` for use in quantum and classical solvers.
 
 - **src/classical_functions.py**:  
@@ -13,7 +13,7 @@ This project provides both classical and quantum (HHL) solvers for the 1D-1V Vla
 
 - **hhl_funcs/**:  
   - `hhl.py`: Main HHL quantum linear system solver (Qiskit-based).
-  - `numpy_matrix.py`, `linear_system_matrix.py`, `hhl_result.py`: Supporting classes for quantum matrix representation and results.
+  - `numpy_matrix.py`, `linear_system_matrix.py`, `hhl_result.py`: Supporting classes for matrix representation and results.
 
 - **HHLsolver.py**:  
   Main example script.  
@@ -43,7 +43,6 @@ This project provides both classical and quantum (HHL) solvers for the 1D-1V Vla
 
    This will:
    - Build the Vlasov operator and initial state.
-   - Print diagnostics about the input vector.
    - Run both the quantum HHL and classical solvers.
    - Print both solutions for comparison.
 
@@ -51,7 +50,7 @@ This project provides both classical and quantum (HHL) solvers for the 1D-1V Vla
 
 ## Structure
 
-- `src/vlasov.py`: Core Vlasov operator and initial state construction.
+- `src/vlasov.py`: Core Vlasov and initial state construction.
 - `src/classical_functions.py`: Classical solver.
 - `hhl_funcs/`: Quantum HHL solver and supporting classes.
 - `HHLsolver.py`: Main example script.
@@ -62,7 +61,6 @@ This project provides both classical and quantum (HHL) solvers for the 1D-1V Vla
 ## Extending
 
 - Modify `src/vlasov.py` to change grid size, Carleman truncation, or initial conditions.
-- Implement more advanced quantum algorithms in `hhl_funcs/` as needed.
 - Add plotting or analysis in `notebooks/`.
 
 ---
