@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from math import ceil
 import math
 import numpy.linalg as LA
-from scipy.sparse.linalg import LinearOperator
+from scipy.sparse.linalg import LinearOperator, gmres
 
 # -------------------------
 # Constants and Parameters
@@ -19,10 +19,10 @@ v_p = 1 / np.sqrt(b)
 xmax = 1e6
 vmax = 10.0 * v_p
 
-Nx, Nv = 2, 2
+Nx, Nv = 8, 8
 N = Nx * Nv
 N_particles = 5e5 * 2 * xmax
-m = 1  # Carleman truncation
+m = 3  # Carleman truncation
 
 # -------------------------
 # Helper functions
@@ -71,7 +71,7 @@ def U_tensor_U(U):
     for n in range(N**2):
         n_phys = n + 1
         U_tensor_U[n] = U[ceil(n_phys/N)-1] * U[ddslash(n_phys, N) - 1]
-    return U_tensor_U
+    return U_tensor_U.reshape(-1)
 
 def create_F0(Nx,Nv,p,n,nu_0):
     d_x = xmax / Nx
@@ -241,7 +241,7 @@ def create_F2(Nx,Nv):
 F2 = create_F2(Nx, Nv)
 
 # -------------------------
-# Carleman Embedding
+# Carleman Embedding (LinearOperator version)
 # -------------------------
 def construct_A_operator(F0, F1, F2, r):
     size = r * N
@@ -251,14 +251,16 @@ def construct_A_operator(F0, F1, F2, r):
             base_idx = j * N
             block = v[base_idx:base_idx + N]
             if j < r:
-                out[base_idx:base_idx + N] += np.float64(j) * np.array(F1, dtype = 'float64') @ np.array(block, dtype='float64')
+                out[base_idx:base_idx + N] += float(j) * np.array(F1, dtype='float64') @ np.array(block, dtype='float64')
             if j > 0:
                 prev_block = v[(j - 1) * N : j * N]
                 out[base_idx:base_idx + N] += j * F0 * prev_block
             if j < r - 1:
                 next_block = v[(j + 1) * N : (j + 2) * N]
-                out[base_idx:base_idx + N] += (j + 1) * (F2 @ U_tensor_U(next_block))
+                result = F2 @ U_tensor_U(next_block)
+                out[base_idx:base_idx + N] += (j + 1) * result.reshape(-1)
         return out
+    print(f"[construct_A_operator] Creating LinearOperator of shape ({size}, {size})")
     return LinearOperator((size, size), matvec=apply_A)
 
 # -------------------------
@@ -273,37 +275,152 @@ F0 = create_F0(Nx, Nv, p, n, nu_0)
 F1 = create_F1_a(Nx, Nv) + create_F1_b(Nx, Nv, p, n, nu_0)
 F2 = np.zeros((N, N**2))  # Replace with full create_F2(Nx, Nv) for nonlinear dynamics
 
-gamma = lognorm(np.diag(F0))  # Scalar rescaling
-if gamma ==0:
-    gamma = 1e-15
-
+def get_gamma():
+    u_in_norm = (N*np.sqrt(Nx))/(np.sqrt(2)*xmax* (2 * vmax / (Nv - 1)))
+    F2_norm = ((e*e*xmax)/(np.sqrt(2)*eps_0*m_e))*np.cos(np.pi/(1+Nv))*(np.sqrt(Nv*(2*Nx-3))/Nx)
+    mu = -nu_0
+    r_plus = (lognorm(F1) + np.sqrt(lognorm(F1)**2 - 4*np.linalg.norm(F0,2)*F2_norm))/ (2*F2_norm)
+    print(f"[get_gamma] lognorm(F1): {lognorm(F1)}")
+    x = np.sqrt(u_in_norm*r_plus)
+    if x == 0 or np.isnan(x):
+        x = 1e-15
+    print(f"[get_gamma] gamma: {x}")
+    return x
+gamma = get_gamma()
 F0_bar = F0 / gamma
 F1_bar = F1
 F2_bar = F2 / gamma**2
 
+# Use the LinearOperator-based Carleman embedding
 A_op = construct_A_operator(F0_bar, F1_bar, F2_bar, m)
+print(f"[main] A_op shape: {A_op.shape}, type: {type(A_op)}")
 
 z0 = np.zeros(m * N)
 z0[:N] = f_vec / gamma
 b = np.zeros_like(z0)
 psi = z0 + b / m
+print(f"[main] z0 shape: {z0.shape}, psi shape: {psi.shape}")
 
-L_op = LinearOperator((m * N, m * N), matvec=lambda v: v - (1 / m) * A_op @ v)
+# Comment out the dense Carleman matrix build (too large for practical use)
+# A_dense, block_sizes = build_carleman_matrix(F0_bar, F1_bar, F2_bar, gamma, m)
+# print(f"[main] Dense Carleman matrix shape: {A_dense.shape}")
+
+'''
+Defining L requires defining N, M1 and M2
+'''
+def M1(k, A, h):
+    """
+    Return a LinearOperator representing
+    M1 = sum_{j=0}^{k-1} |j+1><j| \otimes (A h)/(j+1)
+    Compatible with both dense and LinearOperator A.
+    """
+    # Dimension of the first subsystem
+    dim = k + 1
+    # Get dimension of matrix A for second subsystem
+    if hasattr(A, 'shape'):
+        A_dim = A.shape[0]
+    else:
+        raise ValueError("A must have a shape attribute")
+    total_dim = dim * A_dim
+
+    def matvec(v):
+        v = np.asarray(v).reshape((dim, A_dim))
+        out = np.zeros((dim, A_dim), dtype=complex)
+        for j in range(k):
+            # Apply (A h)/(j+1) to the j-th block
+            block_in = v[j]
+            if isinstance(A, LinearOperator):
+                block_out = A.matvec(block_in) * h / (j + 1)
+            else:
+                block_out = (A * h / (j + 1)) @ block_in
+            out[j + 1] += block_out
+        return out.reshape(-1)
+
+    print(f"[M1] Creating LinearOperator for M1 with shape ({total_dim}, {total_dim})")
+    return LinearOperator((total_dim, total_dim), matvec=matvec, dtype=complex)
+
+def M2(k, A_dim=None):
+    """
+    Return a LinearOperator representing
+    M2 = sum_{j=0}^k |0><j| \otimes I
+    Compatible with both dense and LinearOperator A.
+    """
+    dim = k + 1
+    if A_dim is None:
+        A_dim = N  # fallback, but should be passed explicitly for generality
+    total_dim = dim * A_dim
+
+    def matvec(v):
+        v = np.asarray(v).reshape((dim, A_dim))
+        out = np.zeros((dim, A_dim), dtype=complex)
+        for j in range(dim):
+            out[0] += v[j]
+        return out.reshape(-1)
+
+    print(f"[M2] Creating LinearOperator for M2 with shape ({total_dim}, {total_dim})")
+    return LinearOperator((total_dim, total_dim), matvec=matvec, dtype=complex)
 
 
-def get_L_and_psi():
-    return L_op, psi
-# -------------------------
-# Output shapes for confirmation
-# -------------------------
-# print("L_op shape:", L_op.shape)
-# print("psi shape:", psi.shape)
+def N_op(m, p, M1, M2):
+    """
+    Return a LinearOperator representing
+    N = sum_{i=0}^m |i+1><i| \otimes M2 (I-M1)^{-1} + sum_{i=m+1}^{m+p-1} |i+1><i| \otimes I
+    Compatible with LinearOperator M1, M2.
+    """
+    # Extract dimensions
+    total_dim = M1.shape[0]
+    n_dim = m + p + 1
+    second_dim = total_dim // (m + 1)
+    N_total_dim = n_dim * second_dim
 
-# plt.imshow(f.T, origin='lower', extent=[0, xmax, -vmax, vmax], aspect='auto')
-# plt.title('Initial f(x, v, 0)')
-# plt.xlabel('x')
-# plt.ylabel('v')
-# plt.colorbar()
-# plt.show()
+    # Precompute LinearOperator for (I - M1)^{-1} using GMRES
+    def apply_inv_M1(v):
+        # Solve (I - M1)x = v for x
+        x, info = gmres(LinearOperator(M1.shape, matvec=lambda x: x - M1.matvec(x), dtype=complex), v, atol=1e-10)
+        if info != 0:
+            print(f"[N_op] Warning: GMRES did not fully converge, info={info}")
+        return x
+    Inv_M1 = LinearOperator(M1.shape, matvec=apply_inv_M1, dtype=complex)
 
+    def matvec(v):
+        v = np.asarray(v).reshape((n_dim, second_dim))
+        out = np.zeros((n_dim, second_dim), dtype=complex)
+        # First sum: i=0 to m
+        for i in range(m + 1):
+            block_in = v[i]
+            # Apply (I-M1)^{-1}
+            inv_block = Inv_M1.matvec(block_in)
+            # Apply M2
+            m2_block = M2.matvec(inv_block)
+            out[i + 1] += m2_block[:second_dim]  # Only add the first block (|0>), as M2 maps to first block
+        # Second sum: i=m+1 to m+p-1
+        for i in range(m + 1, m + p):
+            out[i + 1] += v[i]
+        return out.reshape(-1)
+
+    print(f"[N_op] Creating LinearOperator for N_op with shape ({N_total_dim}, {N_total_dim})")
+    return LinearOperator((N_total_dim, N_total_dim), matvec=matvec, dtype=complex)
+
+def implement_l(N_op):
+    """
+    Return a LinearOperator representing L = I - N_op,
+    compatible with N_op as a LinearOperator.
+    """
+    shape = N_op.shape
+    def matvec(v):
+        return v - N_op.matvec(v)
+    print(f"[implement_l] Creating LinearOperator for L with shape {shape}")
+    return LinearOperator(shape, matvec=matvec, dtype=complex)
+
+
+print(gamma)
+# For an 8x8 grid, m*N is small enough for dense matrix operations
+print(A_op.shape)
+# A_matrix = A_op @ np.eye(A_op.shape[1])
+t1 = M1(5, A_op, 1)
+t2 = M2(5)
+t3 = N_op(5, 5, t1, t2)
+t4 = implement_l(t3)
+
+print(t4.shape)
 
