@@ -19,7 +19,7 @@ v_p = 1 / np.sqrt(b)
 xmax = 1e6
 vmax = 10.0 * v_p
 
-Nx, Nv = 8, 8
+Nx, Nv = 4, 4
 N = Nx * Nv
 N_particles = 5e5 * 2 * xmax
 m = 3  # Carleman truncation
@@ -291,15 +291,16 @@ F0_bar = F0 / gamma
 F1_bar = F1
 F2_bar = F2 / gamma**2
 
-# Use the LinearOperator-based Carleman embedding
 A_op = construct_A_operator(F0_bar, F1_bar, F2_bar, m)
-print(f"[main] A_op shape: {A_op.shape}, type: {type(A_op)}")
 
 z0 = np.zeros(m * N)
 z0[:N] = f_vec / gamma
 b = np.zeros_like(z0)
 psi = z0 + b / m
-print(f"[main] z0 shape: {z0.shape}, psi shape: {psi.shape}")
+
+# Remove or comment out print statements and top-level code
+# print(f"[main] A_op shape: {A_op.shape}, type: {type(A_op)}")
+# print(f"[main] z0 shape: {z0.shape}, psi shape: {psi.shape}")
 
 # Comment out the dense Carleman matrix build (too large for practical use)
 # A_dense, block_sizes = build_carleman_matrix(F0_bar, F1_bar, F2_bar, gamma, m)
@@ -343,6 +344,7 @@ def M2(k, A_dim=None):
     """
     Return a LinearOperator representing
     M2 = sum_{j=0}^k |0><j| \otimes I
+    This maps each block j to the first block (|0>).
     Compatible with both dense and LinearOperator A.
     """
     dim = k + 1
@@ -353,6 +355,8 @@ def M2(k, A_dim=None):
     def matvec(v):
         v = np.asarray(v).reshape((dim, A_dim))
         out = np.zeros((dim, A_dim), dtype=complex)
+        # M2 = sum_{j=0}^k |0><j| \otimes I
+        # This means: for each j, take the j-th block and add it to the 0-th block
         for j in range(dim):
             out[0] += v[j]
         return out.reshape(-1)
@@ -413,14 +417,30 @@ def implement_l(N_op):
     return LinearOperator(shape, matvec=matvec, dtype=complex)
 
 
-print(gamma)
-# For an 8x8 grid, m*N is small enough for dense matrix operations
-print(A_op.shape)
-# A_matrix = A_op @ np.eye(A_op.shape[1])
-t1 = M1(5, A_op, 1)
-t2 = M2(5)
-t3 = N_op(5, 5, t1, t2)
-t4 = implement_l(t3)
+def get_L_and_psi():
+    """
+    Returns (L_dense, psi) where L_dense is the dense matrix for HHL and psi is the initial vector.
+    """
+    k = m
+    p = m
+    h = 1
+    M1_op = M1(k, A_op, h)
+    M2_op = M2(k)
+    Nop = N_op(k, p, M1_op, M2_op)
+    L_op = implement_l(Nop)
+    n = L_op.shape[0]
+    I = np.eye(n, dtype='float64')
+    # Convert LinearOperator to dense matrix
+    L_dense = np.column_stack([L_op @ I[:, i] for i in range(n)])
+    return L_dense, psi
 
-print(t4.shape)
+if __name__ == "__main__":
+    # Example usage or diagnostics
+    L_dense, psi_vec = get_L_and_psi()
+    print(f"L_dense shape: {L_dense.shape}")
+    print(f"psi norm: {np.linalg.norm(psi_vec)}")
+    print(f"Any NaNs in psi? {np.isnan(psi_vec).any()}")
+    print(f"Any Infs in psi? {np.isinf(psi_vec).any()}")
+
+
 
